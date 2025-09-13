@@ -9,6 +9,8 @@
 #include <iomanip>
 #include <random>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 
 namespace MinesweeperCPP {
     inline void console_clear() {
@@ -19,7 +21,7 @@ namespace MinesweeperCPP {
     namespace Game {
         struct Cell {
             // Хранится в сохранении
-            bool open = true; // Открыт ли
+            bool open = false; // Открыт ли
             bool danger = false; // Мина ли
             bool flag = false; // Помечен ли флагом (при этом закрыт)
 
@@ -149,10 +151,76 @@ namespace MinesweeperCPP {
                 : name(_name), map_width(_width), map_height(_height), map_amount_mines(_amount_mines), map(map_width, map_height)
             {}
 
+            void save() {
+                std::ofstream file(std::filesystem::path(std::filesystem::current_path() / (name + ".bin")), std::ios::binary);
+                if(!file.is_open()) return;
+
+                uint32_t name_len = name.size();
+                file.write(reinterpret_cast<const char*>(&name_len), sizeof(name_len));
+                file.write(name.data(), name_len);
+
+                file.write(reinterpret_cast<const char*>(&map_width), sizeof(map_width));
+                file.write(reinterpret_cast<const char*>(&map_height), sizeof(map_height));
+                file.write(reinterpret_cast<const char*>(&map_amount_mines), sizeof(map_amount_mines));
+
+                file.write(reinterpret_cast<const char*>(&starter), sizeof(starter));
+                file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat));
+
+                for(const auto& cell : map.data) {
+                    uint8_t packed = save_cellpack(cell);
+                    file.write(reinterpret_cast<const char*>(&packed), sizeof(packed));
+                }
+
+                file.close();
+            }
+            void load(const std::string& filename) {
+                std::ifstream file(filename, std::ios::binary);
+                if(!file.is_open()) return;
+
+                uint32_t name_len;
+                file.read(reinterpret_cast<char*>(&name_len), sizeof(name_len));
+                name.resize(name_len);
+                file.read(name.data(), name_len);
+
+                file.read(reinterpret_cast<char*>(&map_width), sizeof(map_width));
+                file.read(reinterpret_cast<char*>(&map_height), sizeof(map_height));
+                file.read(reinterpret_cast<char*>(&map_amount_mines), sizeof(map_amount_mines));
+
+                file.read(reinterpret_cast<char*>(&starter), sizeof(starter));
+                file.read(reinterpret_cast<char*>(&defeat), sizeof(defeat));
+
+                map = Grid(map_width, map_height);
+
+                for(auto& cell : map.data) {
+                    uint8_t packed;
+                    file.read(reinterpret_cast<char*>(&packed), sizeof(packed));
+                    cell = save_cellunpack(packed);
+                }
+
+                map.generate_count();
+            }
+            uint8_t save_cellpack(const Cell& cell) {
+                uint8_t b = 0;
+                b |= (cell.open   ? 1 : 0) << 0; // 0
+                b |= (cell.danger ? 1 : 0) << 1; // 1
+                b |= (cell.flag   ? 1 : 0) << 2; // 2
+                b |= (cell.count  & 0x0F) << 3;  // биты 3–6 (count до 15)
+                return b;
+            }
+            Cell save_cellunpack(uint8_t b) {
+                Cell cell;
+                cell.open   = b & (1 << 0);
+                cell.danger = b & (1 << 1);
+                cell.flag   = b & (1 << 2);
+                return cell;
+            }
+
             void run() {
                 while(true) {
                     console_clear();
                     std::string command = "";
+
+                    std::cout << " - " << name << " - " << std::endl << std::endl;
 
                     map_render();
 
@@ -164,19 +232,27 @@ namespace MinesweeperCPP {
                         "0 - Мина\n" <<
                         "! - Закрытая ячейка помеченная флагом\n\n";
 
+                    std::cout << "exit - Выйти сейчас же\n";
+                    std::cout << "save - Сохранить игру на текущем моменте\n";
                     if(!defeat) {
-                        std::cout <<
-                            "open - Открыть ячейку\n";
+                        std::cout << "open - Открыть ячейку\n";
                         if(!starter) {
                             std::cout << "flag - Пометить закрытую ячейку флагом\n";
                         }
                     } else {
-                        std::cout << "Вы проиграли :(" << std::endl;
+                        std::cout << "\nВы проиграли :(" << std::endl;
                         std::cout << "Введите imaloser чтобы выйти в главное меню" << std::endl;
                     }
 
                     std::cout << std::endl << "> ";
                     std::cin >> command;
+
+                    if(command == "exit") {
+                        break;
+                    }
+                    if(command == "save") {
+                        save();
+                    }
 
                     if(defeat) {
                         if(command == "imaloser") {
@@ -268,9 +344,9 @@ namespace MinesweeperCPP {
             }
 
         private:
-            const std::string name;
-            const uint16_t map_width, map_height;
-            const uint32_t map_amount_mines;
+            std::string name;
+            uint16_t map_width, map_height;
+            uint32_t map_amount_mines;
             Grid map;
             bool starter = true;
             bool defeat = false;
@@ -312,7 +388,14 @@ namespace MinesweeperCPP {
         inline void game_load() {
             std::string command = "";
 
+            std::string file_name;
 
+            std::cout << "Введите полной название файла по текущему пути: ";
+            std::cin >> file_name;
+
+            game = std::make_unique<Game::MinesweeperGame>("load", 1, 1, 1);
+            game->load(file_name);
+            game->run();
         }
         inline void menu_main() {
             std::string command = "";
@@ -321,8 +404,8 @@ namespace MinesweeperCPP {
             std::cout << "new - Начать новую игру" << std::endl;
             std::cout << "load - Загрузить игру из файла" << std::endl << std::endl;
 
-            /*game = std::make_unique<Game::MinesweeperGame>("test", 16, 16, 32);
-            game->run();*/
+            //game = std::make_unique<Game::MinesweeperGame>("test", 16, 16, 32);
+            //game->run();
 
             std::cout << "> ";
             std::cin >> command;
