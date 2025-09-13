@@ -87,6 +87,30 @@ namespace MinesweeperCPP {
                 }
             }
 
+            size_type flag_count() const {
+                size_type total_flags = 0;
+                for(int i = 0; i < total(); i++) {
+                    if(data[i].flag) {
+                        total_flags++;
+                    }
+                }
+                return total_flags;
+            }
+
+            bool check_win(const size_type& total_mines) {
+                size_type success_flags = 0;
+                for(int i = 0; i < total(); i++) {
+                    Cell& cell = data[i];
+                    if(cell.danger && !cell.open && cell.flag) {
+                        success_flags++;
+                    }
+                }
+                if(success_flags == total_mines) {
+                    return true;
+                }
+                return false;
+            }
+
             void open_recurs(size_type x, size_type y) {
                 if(x >= width || y >= height) return;
                 Cell &cell = at_xy(x, y);
@@ -165,6 +189,7 @@ namespace MinesweeperCPP {
 
                 file.write(reinterpret_cast<const char*>(&starter), sizeof(starter));
                 file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat));
+                file.write(reinterpret_cast<const char*>(&winner), sizeof(winner));
 
                 for(const auto& cell : map.data) {
                     uint8_t packed = save_cellpack(cell);
@@ -188,6 +213,7 @@ namespace MinesweeperCPP {
 
                 file.read(reinterpret_cast<char*>(&starter), sizeof(starter));
                 file.read(reinterpret_cast<char*>(&defeat), sizeof(defeat));
+                file.read(reinterpret_cast<char*>(&winner), sizeof(winner));
 
                 map = Grid(map_width, map_height);
 
@@ -226,22 +252,27 @@ namespace MinesweeperCPP {
 
                     std::cout << std::endl;
 
+                    std::cout << "Поставлено " << map.flag_count() << " из " << map_amount_mines << " флагов\n";
+
                     std::cout <<
                         "# - Закрытая ячейка\n"
-                        "1-9 - Соседние мины открытой безопасной ячейки\n" <<
+                        "1-8 - Соседние мины открытой безопасной ячейки\n" <<
                         "0 - Мина\n" <<
                         "! - Закрытая ячейка помеченная флагом\n\n";
 
                     std::cout << "exit - Выйти сейчас же\n";
                     std::cout << "save - Сохранить игру на текущем моменте\n";
-                    if(!defeat) {
+                    if(defeat) {
+                        std::cout << "\nВы проиграли :(" << std::endl;
+                        std::cout << "Введите imaloser чтобы выйти в главное меню" << std::endl;
+                    } else if(winner) {
+                        std::cout << "\nВы выиграли!" << std::endl;
+                        std::cout << "Введите iwinner чтобы выйти в главное меню" << std::endl;
+                    } else {
                         std::cout << "open - Открыть ячейку\n";
                         if(!starter) {
                             std::cout << "flag - Пометить закрытую ячейку флагом\n";
                         }
-                    } else {
-                        std::cout << "\nВы проиграли :(" << std::endl;
-                        std::cout << "Введите imaloser чтобы выйти в главное меню" << std::endl;
                     }
 
                     std::cout << std::endl << "> ";
@@ -256,6 +287,11 @@ namespace MinesweeperCPP {
 
                     if(defeat) {
                         if(command == "imaloser") {
+                            break;
+                        }
+                        continue;
+                    } else if(winner) {
+                        if(command == "iwinner") {
                             break;
                         }
                         continue;
@@ -282,6 +318,7 @@ namespace MinesweeperCPP {
                         }
                         if(command == "flag" && !starter) {
                             map.flag(cx, cy);
+                            winner = map.check_win(map_amount_mines);
                         }
                     }
                 }
@@ -350,6 +387,7 @@ namespace MinesweeperCPP {
             Grid map;
             bool starter = true;
             bool defeat = false;
+            bool winner = false;
 
         };
     };
@@ -382,7 +420,6 @@ namespace MinesweeperCPP {
             std::cin >> game_amount_mines;
 
             game = std::make_unique<Game::MinesweeperGame>(game_name, game_map_width, game_map_heigth, game_amount_mines);
-
             game->run();
         }
         inline void game_load() {
@@ -393,7 +430,7 @@ namespace MinesweeperCPP {
             std::cout << "Введите полной название файла по текущему пути: ";
             std::cin >> file_name;
 
-            game = std::make_unique<Game::MinesweeperGame>("load", 1, 1, 1);
+            game = std::make_unique<Game::MinesweeperGame>("load", 1, 1, 0);
             game->load(file_name);
             game->run();
         }
