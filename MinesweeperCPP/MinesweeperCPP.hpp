@@ -70,20 +70,29 @@ namespace MinesweeperCPP {
                 }
             }
 
-            bool open(size_type x, size_type y) {
+            bool open(size_type x, size_type y, uint32_t& step_counter) {
                 if(x >= width || y >= height) return false;
                 if(at_xy(x, y).danger) { // Если попался на мину
                     return true;
                 } else {
                     open_recurs(x, y);
+                    step_counter++;
                     return false;
                 }
             }
-            void flag(size_type x, size_type y) {
+            void flag(size_type x, size_type y, const size_type& total_mines, uint32_t& step_counter) {
                 if(x >= width || y >= height) return;
                 Cell& cell = at_xy(x, y);
-                if(!cell.open && !cell.flag) {
-                    cell.flag = true;
+                if(!cell.open) {
+                    if(!cell.flag) {
+                        if(flag_count() < total_mines) {
+                            cell.flag = true;
+                            step_counter++;
+                        }
+                    } else {
+                        cell.flag = false;
+                        step_counter++;
+                    }
                 }
             }
 
@@ -186,6 +195,7 @@ namespace MinesweeperCPP {
                 file.write(reinterpret_cast<const char*>(&map_width), sizeof(map_width));
                 file.write(reinterpret_cast<const char*>(&map_height), sizeof(map_height));
                 file.write(reinterpret_cast<const char*>(&map_amount_mines), sizeof(map_amount_mines));
+                file.write(reinterpret_cast<const char*>(&step_counter), sizeof(step_counter));
 
                 file.write(reinterpret_cast<const char*>(&starter), sizeof(starter));
                 file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat));
@@ -210,6 +220,7 @@ namespace MinesweeperCPP {
                 file.read(reinterpret_cast<char*>(&map_width), sizeof(map_width));
                 file.read(reinterpret_cast<char*>(&map_height), sizeof(map_height));
                 file.read(reinterpret_cast<char*>(&map_amount_mines), sizeof(map_amount_mines));
+                file.read(reinterpret_cast<char*>(&step_counter), sizeof(step_counter));
 
                 file.read(reinterpret_cast<char*>(&starter), sizeof(starter));
                 file.read(reinterpret_cast<char*>(&defeat), sizeof(defeat));
@@ -230,7 +241,6 @@ namespace MinesweeperCPP {
                 b |= (cell.open   ? 1 : 0) << 0; // 0
                 b |= (cell.danger ? 1 : 0) << 1; // 1
                 b |= (cell.flag   ? 1 : 0) << 2; // 2
-                b |= (cell.count  & 0x0F) << 3;  // биты 3–6 (count до 15)
                 return b;
             }
             Cell save_cellunpack(uint8_t b) {
@@ -253,12 +263,13 @@ namespace MinesweeperCPP {
                     std::cout << std::endl;
 
                     std::cout << "Поставлено " << map.flag_count() << " из " << map_amount_mines << " флагов\n";
+                    std::cout << "Сделано " << step_counter << " шагов\n";
 
                     std::cout <<
                         "# - Закрытая ячейка\n"
                         "1-8 - Соседние мины открытой безопасной ячейки\n" <<
                         "0 - Мина\n" <<
-                        "! - Закрытая ячейка помеченная флагом\n\n";
+                        "! - Закрытая ячейка, помеченная флагом\n\n";
 
                     std::cout << "exit - Выйти сейчас же\n";
                     std::cout << "save - Сохранить игру на текущем моменте\n";
@@ -270,7 +281,7 @@ namespace MinesweeperCPP {
                         std::cout << "Введите iwinner чтобы выйти в главное меню" << std::endl;
                     } else {
                         std::cout << "open - Открыть ячейку\n";
-                        if(!starter) {
+                        if(!starter && map.flag_count() < map_amount_mines) {
                             std::cout << "flag - Пометить закрытую ячейку флагом\n";
                         }
                     }
@@ -278,9 +289,6 @@ namespace MinesweeperCPP {
                     std::cout << std::endl << "> ";
                     std::cin >> command;
 
-                    if(command == "exit") {
-                        break;
-                    }
                     if(command == "save") {
                         save();
                     }
@@ -295,6 +303,8 @@ namespace MinesweeperCPP {
                             break;
                         }
                         continue;
+                    } else if(command == "exit") {
+                        break;
                     }
                     if(command == "open" || command == "flag") {
                         size_type cx, cy;
@@ -311,13 +321,13 @@ namespace MinesweeperCPP {
                                 map.generate_count();
                                 starter = false;
                             }
-                            if(map.open(cx, cy)) {
+                            if(map.open(cx, cy, step_counter)) {
                                 defeat = true;
                                 map.open_all();
                             }
                         }
                         if(command == "flag" && !starter) {
-                            map.flag(cx, cy);
+                            map.flag(cx, cy, map_amount_mines, step_counter);
                             winner = map.check_win(map_amount_mines);
                         }
                     }
@@ -384,6 +394,7 @@ namespace MinesweeperCPP {
             std::string name;
             uint16_t map_width, map_height;
             uint32_t map_amount_mines;
+            uint32_t step_counter = 0;
             Grid map;
             bool starter = true;
             bool defeat = false;
