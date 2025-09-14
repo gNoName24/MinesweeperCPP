@@ -11,21 +11,200 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <thread>
+#include <atomic>
+#include <chrono>
+#include <regex>
+#include <sstream>
+
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <mutex>
+#include <queue>
+
+#include <sys/ioctl.h>
 
 namespace MinesweeperCPP {
     inline void console_clear() {
-        system("clear");
+        std::cout << "\033[2J\033[1;1H";
     }
     using size_type = std::size_t;
+
+    inline std::string reverse_colors(const std::string& s) {
+        std::regex sgr_re("\x1B\\[([0-9;]*)m");
+        std::smatch m;
+        int fg = -1, bg = -1;
+
+        if(std::regex_search(s, m, sgr_re)) {
+            std::string codes = m[1].str();
+            std::stringstream ss(codes);
+            std::string tok;
+            while (std::getline(ss, tok, ';')) {
+                if(tok.empty()) continue;
+                int code = std::stoi(tok);
+                if((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
+                    fg = code;
+                } else if((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
+                    bg = code;
+                }
+            }
+        }
+
+        std::string plain = std::regex_replace(s, sgr_re, std::string(""));
+
+        int new_fg = -1, new_bg = -1;
+
+        if(bg != -1) {
+            // bg -> fg: 40..47 -> 30..37 ; 100..107 -> 90..97
+            if(bg >= 40 && bg <= 47) new_fg = bg - 10;
+            else if(bg >= 100 && bg <= 107) new_fg = bg - 10; // 100->90 etc
+        }
+        if(fg != -1) {
+            // fg -> bg: 30..37 -> 40..47 ; 90..97 -> 100..107
+            if(fg >= 30 && fg <= 37) new_bg = fg + 10;
+            else if(fg >= 90 && fg <= 97) new_bg = fg + 10; // 90->100 etc
+        }
+
+        if(new_fg == -1 && new_bg == -1) {
+            new_fg = 30;
+            new_bg = 47;
+        } else {
+            if(new_fg == -1) new_fg = 37;
+            if(new_bg == -1) new_bg = 40;
+        }
+
+        std::string prefix = "\033[" + std::to_string(new_fg) + ";" + std::to_string(new_bg) + "m";
+        std::string suffix = "\033[0m";
+        return prefix + plain + suffix;
+    }
+
+    namespace Keyboard {
+        inline std::atomic<int> last_key{-2};
+        inline std::atomic<bool> running{true};
+        inline std::atomic<bool> paused{ false };
+        inline termios original_tio;
+        inline bool saved = false;
+
+        inline void init() {
+            if(!saved) {
+                tcgetattr(STDIN_FILENO, &original_tio);
+                saved = true;
+            }
+        }
+        inline void set_raw_mode(bool enable) {
+            static struct termios newt;
+            if(!saved) init();
+            if(enable) {
+                newt = original_tio;
+                newt.c_lflag &= ~(ICANON | ECHO);
+                tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+            } else {
+                tcsetattr(STDIN_FILENO, TCSANOW, &original_tio);
+            }
+        }
+        inline void pause_input() {
+            paused.store(true, std::memory_order_relaxed);
+            // даём потоку время выйти из poll/read
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        inline void resume_input() {
+            // очистим ввод, чтобы случайные байты не попали в следующую обработку
+            tcflush(STDIN_FILENO, TCIFLUSH);
+            paused.store(false, std::memory_order_relaxed);
+        }
+        inline int kbhit() {
+            int old_flags = fcntl(STDIN_FILENO, F_GETFL);
+            fcntl(STDIN_FILENO, F_SETFL, old_flags | O_NONBLOCK);
+
+            char ch;
+            int nread = read(STDIN_FILENO, &ch, 1);
+
+            fcntl(STDIN_FILENO, F_SETFL, old_flags);
+
+            if(nread == 1) return ch;
+            return -1;
+        }
+        inline std::mutex key_mutex;
+        inline std::queue<int> key_queue;
+
+        inline void push_key(int key) {
+            std::lock_guard<std::mutex> lock(key_mutex);
+            key_queue.push(key);
+        }
+
+        inline int pop_key() {
+            std::lock_guard<std::mutex> lock(key_mutex);
+            if (key_queue.empty()) return -1;
+            int k = key_queue.front();
+            key_queue.pop();
+            return k;
+        }
+
+        inline void keyboard_thread() {
+            struct pollfd pfd;
+            pfd.fd = STDIN_FILENO;
+            pfd.events = POLLIN;
+
+            while(running.load(std::memory_order_relaxed)) {
+                if(paused.load(std::memory_order_relaxed)) {
+                    // когда приостановлен — не дергаем read, просто ждём
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    continue;
+                }
+
+                // poll с небольшим таймаутом (100 ms) — даёт отзывчивость к paused/running
+                int ret = poll(&pfd, 1, 100);
+                if(ret > 0 && (pfd.revents & POLLIN)) {
+                    unsigned char buf[8];
+                    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
+                    if(n > 0) {
+                        for(ssize_t i = 0; i < n; i++) {
+                            push_key(static_cast<int>(buf[i]));
+                        }
+                    }
+                }
+                // иначе ret==0 -> timeout, продолжим и проверим флаги
+            }
+        }
+        inline std::string read_line_manual() {
+            std::string line;
+            unsigned char c;
+            while(true) {
+                int ret = poll((pollfd[]){ {STDIN_FILENO, POLLIN, 0} }, 1, -1); // блокируем до ввода
+                if(ret > 0) {
+                    ssize_t n = read(STDIN_FILENO, &c, 1);
+                    if(n == 1) {
+                        if(c == '\n' || c == '\r') {
+                            write(STDOUT_FILENO, "\n", 1);
+                            break;
+                        } else if (c == 127 || c == 8) { // backspace
+                            if(!line.empty()) {
+                                line.pop_back();
+                                // простой backspace-эмулятор
+                                const char *bs = "\b \b";
+                                write(STDOUT_FILENO, bs, 3);
+                            }
+                        } else {
+                            line.push_back(static_cast<char>(c));
+                            write(STDOUT_FILENO, &c, 1);
+                        }
+                    }
+                }
+            }
+            return line;
+        }
+    };
 
     namespace Game {
         struct Cell {
             // Хранится в сохранении
-            bool open = false; // Открыт ли
-            bool danger = false; // Мина ли
-            bool flag = false; // Помечен ли флагом (при этом закрыт)
+            bool open = false; // Открыт
+            bool danger = false; // Мина
+            bool flag = false; // Помечен флагом (при этом закрыт)
 
-            // НЕ хранится в сохранении. Вычисляется в реалтайме
+            // НЕ хранится в сохранении / Вычисляется в реалтайме
             uint8_t count = 0; // Количество мин возле безопасной открытой ячейки, 0 - пустая ячейка
         };
         struct Grid {
@@ -33,30 +212,15 @@ namespace MinesweeperCPP {
             size_type height{};
             std::vector<Cell> data;
 
+            // Размеры видимой области
+            uint8_t viewport_width = 15;
+            uint8_t viewport_height = 15;
+
             Grid() = default;
             Grid(size_type w, size_type h) : width(w), height(h), data(w * h) {}
 
             size_type total() const noexcept { return width * height; }
             bool empty() const noexcept { return data.empty(); }
-
-            void generate_mines(uint32_t amount) {
-                std::vector<std::pair<int, int>> coords;
-                coords.reserve(width * height);
-
-                for(int y = 0; y < height; ++y) {
-                    for(int x = 0; x < width; ++x) {
-                        coords.emplace_back(x, y);
-                    }
-                }
-
-                thread_local std::random_device rd;
-                thread_local std::mt19937 gen(rd());
-                std::shuffle(coords.begin(), coords.end(), gen);
-
-                for(uint32_t i = 0; i < amount && i < coords.size(); ++i) {
-                    at_xy(coords[i].first, coords[i].second).danger = true;
-                }
-            }
 
             Cell& at_flat(uint32_t idx) noexcept { return data[idx]; }
             Cell& at_xy(size_type x, size_type y) noexcept { return data[y * width + x]; }
@@ -64,118 +228,34 @@ namespace MinesweeperCPP {
             void set_flat(uint32_t idx, Cell v) noexcept { data[idx] = v; }
             void set_xy(size_type x, size_type y, Cell v) noexcept { data[y * width + x] = v; }
 
+            // Ресет карты. При этом, ресетуются только open, flag и count
+            void reset_funny();
+
+            // Генерация указанного количества мин в рандомных местах
+            // Сначала равномерно ставится указанное количество мин, а потом все элементы карты перемешиваются
+            void generate_mines(uint32_t amount);
+
+            // Генерация числа соседних мин к безопасным ячейкам
+            void generate_count();
+
             void open_all() {
-                for(int i = 0; i < total(); i++) {
-                    data[i].open = true;
-                }
+                for(int i = 0; i < total(); i++) { data[i].open = true; }
+            }
+            void flag_all() {
+                for(int i = 0; i < total(); i++) { data[i].flag = true; }
             }
 
-            bool open(size_type x, size_type y, uint32_t& step_counter) {
-                if(x >= width || y >= height) return false;
-                if(at_xy(x, y).danger) { // Если попался на мину
-                    return true;
-                } else {
-                    open_recurs(x, y);
-                    step_counter++;
-                    return false;
-                }
-            }
-            void flag(size_type x, size_type y, const size_type& total_mines, uint32_t& step_counter) {
-                if(x >= width || y >= height) return;
-                Cell& cell = at_xy(x, y);
-                if(!cell.open) {
-                    if(!cell.flag) {
-                        if(flag_count() < total_mines) {
-                            cell.flag = true;
-                            step_counter++;
-                        }
-                    } else {
-                        cell.flag = false;
-                        step_counter++;
-                    }
-                }
-            }
+            bool open(size_type x, size_type y, uint32_t& step_counter);
+            bool flag(size_type x, size_type y, const size_type& total_mines, uint32_t& step_counter);
 
-            size_type flag_count() const {
-                size_type total_flags = 0;
-                for(int i = 0; i < total(); i++) {
-                    if(data[i].flag) {
-                        total_flags++;
-                    }
-                }
-                return total_flags;
-            }
+            void open_recurs(size_type x, size_type y);
 
-            bool check_win(const size_type& total_mines) {
-                size_type success_flags = 0;
-                for(int i = 0; i < total(); i++) {
-                    Cell& cell = data[i];
-                    if(cell.danger && !cell.open && cell.flag) {
-                        success_flags++;
-                    }
-                }
-                if(success_flags == total_mines) {
-                    return true;
-                }
-                return false;
-            }
+            // Общее количество установленных флагов
+            size_type flag_count_total() const;
+            // Общее количество правильно установленных флагов
+            size_type flag_count_success() const;
 
-            void open_recurs(size_type x, size_type y) {
-                if(x >= width || y >= height) return;
-                Cell &cell = at_xy(x, y);
-
-                // Если уже открыта или стоит флаг
-                if(cell.open || cell.flag) return;
-
-                cell.open = true;
-
-                // Если рядом есть мины
-                if(cell.count > 0) return;
-
-                for(int dy = -1; dy <= 1; ++dy) {
-                    for(int dx = -1; dx <= 1; ++dx) {
-                        if(dx == 0 && dy == 0) continue;
-
-                        int nx = static_cast<int>(x) + dx;
-                        int ny = static_cast<int>(y) + dy;
-
-                        if(nx >= 0 && ny >= 0 && nx < static_cast<int>(width) && ny < static_cast<int>(height)) {
-                            open_recurs(nx, ny);
-                        }
-                    }
-                }
-            }
-            void generate_count() {
-                for(size_type row = 0; row < height; ++row) {
-                    for(size_type col = 0; col < width; ++col) {
-                        Cell &cell = at_xy(col, row);
-
-                        if(cell.danger) { // если это мина
-                            cell.count = 0;
-                            continue;
-                        }
-
-                        int neighbour_mines = 0;
-
-                        for(int offset_row = -1; offset_row <= 1; ++offset_row) {
-                            for(int offset_col = -1; offset_col <= 1; ++offset_col) {
-                                if(offset_row == 0 && offset_col == 0) continue; // пропускаем саму клетку
-
-                                size_type neighbour_col = col + offset_col;
-                                size_type neighbour_row = row + offset_row;
-
-                                if(neighbour_col < width && neighbour_row < height) {
-                                    if(at_xy(neighbour_col, neighbour_row).danger) {
-                                        neighbour_mines++;
-                                    }
-                                }
-                            }
-                        }
-
-                        cell.count = neighbour_mines;
-                    }
-                }
-            }
+            bool check_win(const size_type& total_mines) const;
         };
 
         class MinesweeperGame {
@@ -184,211 +264,21 @@ namespace MinesweeperCPP {
                 : name(_name), map_width(_width), map_height(_height), map_amount_mines(_amount_mines), map(map_width, map_height)
             {}
 
-            void save() {
-                std::ofstream file(std::filesystem::path(std::filesystem::current_path() / (name + ".bin")), std::ios::binary);
-                if(!file.is_open()) return;
+            // Сохранение игры в файл
+            void save(const std::string& file_name);
+            bool load(const std::string& file_name);
+            uint8_t save_cellpack(const Cell& cell); // Упаковка ячейки в один байт
+            Cell save_cellunpack(uint8_t b); // Распаковка одного байта в ячейку
 
-                uint32_t name_len = name.size();
-                file.write(reinterpret_cast<const char*>(&name_len), sizeof(name_len));
-                file.write(name.data(), name_len);
+            void map_render();
 
-                file.write(reinterpret_cast<const char*>(&map_width), sizeof(map_width));
-                file.write(reinterpret_cast<const char*>(&map_height), sizeof(map_height));
-                file.write(reinterpret_cast<const char*>(&map_amount_mines), sizeof(map_amount_mines));
-                file.write(reinterpret_cast<const char*>(&step_counter), sizeof(step_counter));
-
-                file.write(reinterpret_cast<const char*>(&starter), sizeof(starter));
-                file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat));
-                file.write(reinterpret_cast<const char*>(&winner), sizeof(winner));
-
-                for(const auto& cell : map.data) {
-                    uint8_t packed = save_cellpack(cell);
-                    file.write(reinterpret_cast<const char*>(&packed), sizeof(packed));
-                }
-
-                file.close();
-            }
-            void load(const std::string& filename) {
-                std::ifstream file(filename, std::ios::binary);
-                if(!file.is_open()) return;
-
-                uint32_t name_len;
-                file.read(reinterpret_cast<char*>(&name_len), sizeof(name_len));
-                name.resize(name_len);
-                file.read(name.data(), name_len);
-
-                file.read(reinterpret_cast<char*>(&map_width), sizeof(map_width));
-                file.read(reinterpret_cast<char*>(&map_height), sizeof(map_height));
-                file.read(reinterpret_cast<char*>(&map_amount_mines), sizeof(map_amount_mines));
-                file.read(reinterpret_cast<char*>(&step_counter), sizeof(step_counter));
-
-                file.read(reinterpret_cast<char*>(&starter), sizeof(starter));
-                file.read(reinterpret_cast<char*>(&defeat), sizeof(defeat));
-                file.read(reinterpret_cast<char*>(&winner), sizeof(winner));
-
-                map = Grid(map_width, map_height);
-
-                for(auto& cell : map.data) {
-                    uint8_t packed;
-                    file.read(reinterpret_cast<char*>(&packed), sizeof(packed));
-                    cell = save_cellunpack(packed);
-                }
-
-                map.generate_count();
-            }
-            uint8_t save_cellpack(const Cell& cell) {
-                uint8_t b = 0;
-                b |= (cell.open   ? 1 : 0) << 0; // 0
-                b |= (cell.danger ? 1 : 0) << 1; // 1
-                b |= (cell.flag   ? 1 : 0) << 2; // 2
-                return b;
-            }
-            Cell save_cellunpack(uint8_t b) {
-                Cell cell;
-                cell.open   = b & (1 << 0);
-                cell.danger = b & (1 << 1);
-                cell.flag   = b & (1 << 2);
-                return cell;
-            }
-
-            void run() {
-                while(true) {
-                    console_clear();
-                    std::string command = "";
-
-                    std::cout << " - " << name << " - " << std::endl << std::endl;
-
-                    map_render();
-
-                    std::cout << std::endl;
-
-                    std::cout << "Поставлено " << map.flag_count() << " из " << map_amount_mines << " флагов\n";
-                    std::cout << "Сделано " << step_counter << " шагов\n";
-
-                    std::cout <<
-                        "# - Закрытая ячейка\n"
-                        "1-8 - Соседние мины открытой безопасной ячейки\n" <<
-                        "0 - Мина\n" <<
-                        "! - Закрытая ячейка, помеченная флагом\n\n";
-
-                    std::cout << "exit - Выйти сейчас же\n";
-                    std::cout << "save - Сохранить игру на текущем моменте\n";
-                    if(defeat) {
-                        std::cout << "\nВы проиграли :(" << std::endl;
-                        std::cout << "Введите imaloser чтобы выйти в главное меню" << std::endl;
-                    } else if(winner) {
-                        std::cout << "\nВы выиграли!" << std::endl;
-                        std::cout << "Введите iwinner чтобы выйти в главное меню" << std::endl;
-                    } else {
-                        std::cout << "open - Открыть ячейку\n";
-                        if(!starter && map.flag_count() < map_amount_mines) {
-                            std::cout << "flag - Пометить закрытую ячейку флагом\n";
-                        }
-                    }
-
-                    std::cout << std::endl << "> ";
-                    std::cin >> command;
-
-                    if(command == "save") {
-                        save();
-                    }
-
-                    if(defeat) {
-                        if(command == "imaloser") {
-                            break;
-                        }
-                        continue;
-                    } else if(winner) {
-                        if(command == "iwinner") {
-                            break;
-                        }
-                        continue;
-                    } else if(command == "exit") {
-                        break;
-                    }
-                    if(command == "open" || command == "flag") {
-                        size_type cx, cy;
-
-                        std::cout << "Введите координату x: ";
-                        std::cin >> cx;
-
-                        std::cout << "Введите координату y: ";
-                        std::cin >> cy;
-
-                        if(command == "open") {
-                            if(starter) {
-                                map.generate_mines(map_amount_mines);
-                                map.generate_count();
-                                starter = false;
-                            }
-                            if(map.open(cx, cy, step_counter)) {
-                                defeat = true;
-                                map.open_all();
-                            }
-                        }
-                        if(command == "flag" && !starter) {
-                            map.flag(cx, cy, map_amount_mines, step_counter);
-                            winner = map.check_win(map_amount_mines);
-                        }
-                    }
-                }
-            }
-
-            void map_render() {
-                size_type max_width = 2;
-
-                std::cout << "   ";
-                for(size_type x = 0; x < map.width; ++x) {
-                    std::cout << " " << std::setw(max_width) << x;
-                }
-                std::cout << '\n';
-
-                std::string line;
-                line.reserve((max_width + 1) * map.width + 4);
-                line += "   ";
-                for(size_type i = 0; i < map.width; ++i) {
-                    line += "+"; line += std::string(max_width, '-');
-                }
-                line += '+';
-                std::cout << line << '\n';
-
-                for(size_type y = 0; y < map.height; ++y) {
-                    std::cout << std::setw(2) << y << " ";
-                    for(size_type x = 0; x < map.width; ++x) {
-                        Game::Cell cell = map.at_xy(x, y);
-                        std::cout << '|' << std::setw(static_cast<int>(max_width));
-
-                        if(!cell.open) { // Ячейка не открыта
-                            if(cell.flag) { // Ячейка помечена флагом
-                                std::cout << "\033[43m!" << std::string(max_width - 1, ' ') << "\033[0m";
-                            } else {
-                                std::cout << "\033[47m#" << std::string(max_width - 1, ' ') << "\033[0m";
-                            }
-                        } else { // Ячейка открыта
-                            if(cell.danger) { // Если мина
-                                std::cout << "\033[0;31m0" << std::string(max_width - 1, ' ') << "\033[0m";
-                            } else { // Если не мина
-                                if(cell.count == 0) { // 0 значит просто пустая клетка
-                                    std::cout << " ";
-                                } else {
-                                    const char* colors[8] = {
-                                        "\033[0;32m", // Зеленый
-                                        "\033[1;32m", // Ярко-зеленый
-                                        "\033[0;36m", // Бирюзовый (переход к желтому)
-                                        "\033[0;33m", // Желтый
-                                        "\033[1;33m", // Ярко-желтый (почти оранжевый)
-                                        "\033[0;31m", // Красный
-                                        "\033[1;31m", // Ярко-красный
-                                        "\033[0;35m"  // Пурпурный (насыщенный красный край)
-                                    };
-                                    std::cout << colors[cell.count - 1] << std::to_string(cell.count) << std::string(max_width - 1, ' ') << "\033[0m";
-                                }
-                            }
-                        }
-                    }
-                    std::cout << '|' << '\n' << line << '\n';
-                }
-            }
+            void run();
+            void run_handle_movement(const int& key);
+            void run_handle_save(const int& key);
+            void run_handle_step(const int& key);
+            bool run_handle_final(const std::string &command);
+            bool run_handle_exit(const std::string &command);
+            void run_handle_debug(const std::string &command);
 
         private:
             std::string name;
@@ -400,6 +290,10 @@ namespace MinesweeperCPP {
             bool defeat = false;
             bool winner = false;
 
+            // Cursor
+            uint16_t cursor_position_x = 0;
+            uint16_t cursor_position_y = 0;
+
         };
     };
 
@@ -408,8 +302,8 @@ namespace MinesweeperCPP {
     // Сцены
     namespace Scenes {
         inline void game_new() {
-            std::string command = "";
-
+            Keyboard::pause_input();
+            Keyboard::set_raw_mode(false);
             std::string game_name;
             uint16_t game_map_width, game_map_heigth;
             uint32_t game_amount_mines;
@@ -431,46 +325,88 @@ namespace MinesweeperCPP {
             std::cin >> game_amount_mines;
 
             game = std::make_unique<Game::MinesweeperGame>(game_name, game_map_width, game_map_heigth, game_amount_mines);
-            game->run();
+            Keyboard::set_raw_mode(true);
+            Keyboard::resume_input();
         }
         inline void game_load() {
-            std::string command = "";
-
+            Keyboard::set_raw_mode(false);
             std::string file_name;
 
             std::cout << "Введите полной название файла по текущему пути: ";
             std::cin >> file_name;
 
-            game = std::make_unique<Game::MinesweeperGame>("load", 1, 1, 0);
-            game->load(file_name);
-            game->run();
+            game = std::make_unique<Game::MinesweeperGame>("LOAD", 1, 1, 0);
+            if(game->load(file_name)) {
+                game->run();
+            }
+            Keyboard::set_raw_mode(true);
         }
-        inline void menu_main() {
-            std::string command = "";
+        inline bool menu_main(const int& key) {
+            std::cout << "- MinesweeperCPP by NoName24\n\n";
 
-            std::cout << "- MinesweeperCPP by NoName24" << std::endl << std::endl;
-            std::cout << "new - Начать новую игру" << std::endl;
-            std::cout << "load - Загрузить игру из файла" << std::endl << std::endl;
+            std::cout << "n - Начать новую игру\n";
+            std::cout << "l - Загрузить игру из файла\n";
+            std::cout << "q - Завершить работу программы\n";
+            std::cout << "\n";
 
-            //game = std::make_unique<Game::MinesweeperGame>("test", 16, 16, 32);
-            //game->run();
+            // Завершение работы
+            switch(key) {
+                case 'q':
+                    return true;
+                    break;
 
-            std::cout << "> ";
-            std::cin >> command;
+                case 'n':
+                    game_new();
+                    break;
+                case 'l':
+                    game_load();
+                    break;
 
-            if(command == "new") {
-                game_new();
+                // DEBUG
+                case 'd':
+                    game = std::make_unique<Game::MinesweeperGame>("DEBUGGAME", 32, 32, 128);
+                    game->run();
+                    break;
+
+                case -2:
+                    break;
+                default:
+                    std::cout << "Неизвестная команда\n";
+                    break;
             }
-            if(command == "load") {
-                game_load();
-            }
+
+            return false;
         }
     };
 
     inline void starter() {
+        Keyboard::init();
+        Keyboard::set_raw_mode(true);
+        std::thread t(Keyboard::keyboard_thread);
+
+        console_clear();
+        Scenes::menu_main(-2);
+
+        int key;
         while(true) {
-            console_clear();
-            Scenes::menu_main();
+            key = Keyboard::pop_key();
+            if(key != -1) {
+                console_clear();
+                if(Scenes::menu_main(key)) {
+                    std::cout << "Завершение" << std::endl;
+                    break;
+                }
+                if (game) {
+                    console_clear();
+                    game->run();   // тут уже всё работает, т.к. поток клавиатуры активен
+                    game.reset();
+                }
+            }
+            usleep(5000);
         }
+
+        Keyboard::running = false;
+        t.join();
+        Keyboard::set_raw_mode(false);
     }
 };
