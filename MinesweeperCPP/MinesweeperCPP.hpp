@@ -276,9 +276,9 @@ namespace MinesweeperCPP {
             void run_handle_movement(const int& key);
             void run_handle_save(const int& key);
             void run_handle_step(const int& key);
-            bool run_handle_final(const std::string &command);
-            bool run_handle_exit(const std::string &command);
-            void run_handle_debug(const std::string &command);
+            bool run_handle_final(const int& key);
+            bool run_handle_exit(const int& key);
+            void run_handle_debug(const int& key);
 
         private:
             std::string name;
@@ -329,6 +329,7 @@ namespace MinesweeperCPP {
             Keyboard::resume_input();
         }
         inline void game_load() {
+            Keyboard::pause_input();
             Keyboard::set_raw_mode(false);
             std::string file_name;
 
@@ -336,10 +337,9 @@ namespace MinesweeperCPP {
             std::cin >> file_name;
 
             game = std::make_unique<Game::MinesweeperGame>("LOAD", 1, 1, 0);
-            if(game->load(file_name)) {
-                game->run();
-            }
+            if(game->load(file_name)) {}
             Keyboard::set_raw_mode(true);
+            Keyboard::resume_input();
         }
         inline bool menu_main(const int& key) {
             std::cout << "- MinesweeperCPP by NoName24\n\n";
@@ -398,11 +398,12 @@ namespace MinesweeperCPP {
                 }
                 if (game) {
                     console_clear();
-                    game->run();   // тут уже всё работает, т.к. поток клавиатуры активен
+                    std::cout << "Нажмите на (почти) любую клавишу чтобы начать игру\n";
+                    game->run();
                     game.reset();
                 }
             }
-            usleep(5000);
+            usleep(1000);
         }
 
         Keyboard::running = false;

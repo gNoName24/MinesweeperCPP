@@ -58,11 +58,23 @@ namespace MinesweeperCPP {
             while(true) {
                 int key;
                 bool got = false;
+                bool quit = false;
                 while((key = Keyboard::pop_key()) != -1) {
                     run_handle_movement(key);
                     run_handle_save(key);
                     run_handle_step(key);
+                    if(run_handle_final(key) || run_handle_exit(key)) {
+                        quit = true;
+                    }
+
+                    run_handle_debug(key);
                     got = true;
+                }
+
+                if(quit) {
+                    console_clear();
+                    Scenes::menu_main(-2);
+                    break;
                 }
 
                 if(got) {
@@ -114,19 +126,8 @@ namespace MinesweeperCPP {
                     std::cout << "j - Вниз / ";
                     std::cout << "k - Влево / ";
                     std::cout << "l - Вправо\n";
-
-                    run_handle_movement(key);
-
-                    run_handle_save(key);
-
-                    //if(run_handle_final(command) || run_handle_exit(command)) {
-                    //    break;
-                    //}
-                    run_handle_step(key);
-
-                    //run_handle_debug(command);
                 }
-                usleep(5000);
+                usleep(1000);
             }
         }
         void MinesweeperGame::run_handle_movement(const int& key) {
@@ -165,9 +166,9 @@ namespace MinesweeperCPP {
             }
         }
         void MinesweeperGame::run_handle_save(const int& key) {
-            //if(command == "save") {
-            //    save(name);
-            //}
+            if(key == 's') {
+                save(name);
+            }
         }
         void MinesweeperGame::run_handle_step(const int& key) {
             if(key == 'o') {
@@ -187,23 +188,27 @@ namespace MinesweeperCPP {
                 }
             }
         }
-        bool MinesweeperGame::run_handle_final(const std::string &command) {
-            if(defeat && command == "imaloser") {
+        bool MinesweeperGame::run_handle_final(const int& key) {
+            if(defeat && key == 'c') {
                 return true;
             }
-            if(winner && command == "iwinner") {
-                return true;
-            }
-            return false;
-        }
-        bool MinesweeperGame::run_handle_exit(const std::string &command) {
-            if(command == "exit") {
+            if(winner && key == 'c') {
                 return true;
             }
             return false;
         }
-        void MinesweeperGame::run_handle_debug(const std::string &command) {
-
+        bool MinesweeperGame::run_handle_exit(const int& key) {
+            if(key == 'q') {
+                return true;
+            }
+            return false;
+        }
+        void MinesweeperGame::run_handle_debug(const int& key) {
+            switch(key) {
+                case '1': // Открытие всех ячеек
+                    map.open_all();
+                    break;
+            }
         }
     };
 };

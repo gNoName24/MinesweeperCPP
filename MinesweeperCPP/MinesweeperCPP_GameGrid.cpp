@@ -13,6 +13,7 @@ namespace MinesweeperCPP {
             generate_count();
         }
         void Grid::generate_mines(uint32_t amount) {
+            std::cout << "-> Генерация мин" << std::endl;
             std::vector<std::pair<int, int>> coords;
             coords.reserve(width * height);
 
@@ -32,6 +33,7 @@ namespace MinesweeperCPP {
         }
 
         void Grid::generate_count() {
+            std::cout << "-> Генерация количества" << std::endl;
             for(size_type row = 0; row < height; ++row) {
                 for(size_type col = 0; col < width; ++col) {
                     Cell &cell = at_xy(col, row);
@@ -64,6 +66,7 @@ namespace MinesweeperCPP {
         }
 
         bool Grid::open(size_type x, size_type y, uint32_t& step_counter) {
+            std::cout << "-> Открытие ячейки " << x << "x" << y << "" << std::endl;
             if(x >= width || y >= height) return false;
             if(at_xy(x, y).danger) { // Если попался на мину
                 return true;
@@ -74,6 +77,7 @@ namespace MinesweeperCPP {
             }
         }
         bool Grid::flag(size_type x, size_type y, const size_type& total_mines, uint32_t& step_counter) {
+            std::cout << "-> Пометка ячейки " << x << "x" << y << " флагом" << std::endl;
             if(x >= width || y >= height) return false;
             Cell& cell = at_xy(x, y);
             if(!cell.open) {
