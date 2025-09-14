@@ -89,7 +89,7 @@ namespace MinesweeperCPP {
 
                     size_type flag_count_total = map.flag_count_total();
 
-                    std::cout << " - " << name << " - " << std::endl << std::endl;
+                    std::cout << " - " << name << " - " << map_width << "x" << map_height << " - " << map_amount_mines << " -\n\n";
 
                     map_render();
 
@@ -100,11 +100,11 @@ namespace MinesweeperCPP {
                     std::cout << "Поставлено " << flag_count_total << " из " << map_amount_mines << " флагов\n";
                     std::cout << "Сделано " << step_counter << " шагов\n";
 
-                    std::cout <<
+                    /*std::cout <<
                         "\033[47m#\033[0m - Закрытая ячейка\n"
                         "\033[0;32m1\033[0m-\033[0;35m8\033[0m - Соседние мины открытой безопасной ячейки\n" <<
                         "\033[0;31m0\033[0m - Мина\n" <<
-                        "\033[43m!\033[0m - Закрытая ячейка, помеченная флагом\n\n";
+                        "\033[43m!\033[0m - Закрытая ячейка, помеченная флагом\n\n";*/
                     if(defeat) {
                         std::cout << "\nВы проиграли :(\n";
                         std::cout << "Нажмите c чтобы выйти в главное меню\n";

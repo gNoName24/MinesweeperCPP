@@ -40,6 +40,10 @@ namespace MinesweeperCPP {
             file.write(reinterpret_cast<const char*>(&map_amount_mines), sizeof(map_amount_mines));
             file.write(reinterpret_cast<const char*>(&step_counter), sizeof(step_counter));
 
+            // Cursor
+            file.write(reinterpret_cast<const char*>(&cursor_position_x), sizeof(cursor_position_x));
+            file.write(reinterpret_cast<const char*>(&cursor_position_y), sizeof(cursor_position_y));
+
             file.write(reinterpret_cast<const char*>(&starter), sizeof(starter));
             file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat));
             file.write(reinterpret_cast<const char*>(&winner), sizeof(winner));
@@ -76,6 +80,10 @@ namespace MinesweeperCPP {
             file.read(reinterpret_cast<char*>(&map_height), sizeof(map_height));
             file.read(reinterpret_cast<char*>(&map_amount_mines), sizeof(map_amount_mines));
             file.read(reinterpret_cast<char*>(&step_counter), sizeof(step_counter));
+
+            // Cursor
+            file.read(reinterpret_cast<char*>(&cursor_position_x), sizeof(cursor_position_x));
+            file.read(reinterpret_cast<char*>(&cursor_position_y), sizeof(cursor_position_y));
 
             file.read(reinterpret_cast<char*>(&starter), sizeof(starter));
             file.read(reinterpret_cast<char*>(&defeat), sizeof(defeat));
