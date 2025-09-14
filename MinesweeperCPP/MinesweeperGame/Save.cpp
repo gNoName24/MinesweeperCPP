@@ -1,4 +1,7 @@
-#include "MinesweeperCPP.hpp"
+#include "../MinesweeperCPP.hpp"
+
+#include <fstream>
+#include <filesystem>
 
 namespace MinesweeperCPP {
     namespace Game {

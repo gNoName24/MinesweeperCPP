@@ -8,7 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(MinesweeperCPP
     main.cpp
 
-    MinesweeperCPP/MinesweeperCPP_GameGrid.cpp
-    MinesweeperCPP/MinesweeperCPP_MinesweeperGame_Save.cpp
-    MinesweeperCPP/MinesweeperCPP_MinesweeperGame_Run.cpp
+    MinesweeperCPP/MinesweeperCPP.cpp
+    MinesweeperCPP/Keyboard.cpp
+    MinesweeperCPP/GameGrid.cpp
+    MinesweeperCPP/MinesweeperGame/Save.cpp
+    MinesweeperCPP/MinesweeperGame/Run.cpp
 )

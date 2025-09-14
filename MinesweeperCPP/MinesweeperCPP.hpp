@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdlib.h> // clear
+/*#include <stdlib.h> // clear
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -24,151 +24,50 @@
 #include <mutex>
 #include <queue>
 
-#include <sys/ioctl.h>
+#include <sys/ioctl.h>*/
+
+#include <iostream>
+#include <cstdint>
+#include <string>
+#include <unistd.h>
+
+// Для потоков
+#include <thread>
+#include <atomic>
+#include <chrono>
+#include <mutex>
+#include <queue>
+
+// Консоль
+#include <termios.h> // Получение клавиш
 
 namespace MinesweeperCPP {
-    inline void console_clear() {
-        std::cout << "\033[2J\033[1;1H";
-    }
     using size_type = std::size_t;
 
-    inline std::string reverse_colors(const std::string& s) {
-        std::regex sgr_re("\x1B\\[([0-9;]*)m");
-        std::smatch m;
-        int fg = -1, bg = -1;
-
-        if(std::regex_search(s, m, sgr_re)) {
-            std::string codes = m[1].str();
-            std::stringstream ss(codes);
-            std::string tok;
-            while (std::getline(ss, tok, ';')) {
-                if(tok.empty()) continue;
-                int code = std::stoi(tok);
-                if((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
-                    fg = code;
-                } else if((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
-                    bg = code;
-                }
-            }
-        }
-
-        std::string plain = std::regex_replace(s, sgr_re, std::string(""));
-
-        int new_fg = -1, new_bg = -1;
-
-        if(bg != -1) {
-            // bg -> fg: 40..47 -> 30..37 ; 100..107 -> 90..97
-            if(bg >= 40 && bg <= 47) new_fg = bg - 10;
-            else if(bg >= 100 && bg <= 107) new_fg = bg - 10; // 100->90 etc
-        }
-        if(fg != -1) {
-            // fg -> bg: 30..37 -> 40..47 ; 90..97 -> 100..107
-            if(fg >= 30 && fg <= 37) new_bg = fg + 10;
-            else if(fg >= 90 && fg <= 97) new_bg = fg + 10; // 90->100 etc
-        }
-
-        if(new_fg == -1 && new_bg == -1) {
-            new_fg = 30;
-            new_bg = 47;
-        } else {
-            if(new_fg == -1) new_fg = 37;
-            if(new_bg == -1) new_bg = 40;
-        }
-
-        std::string prefix = "\033[" + std::to_string(new_fg) + ";" + std::to_string(new_bg) + "m";
-        std::string suffix = "\033[0m";
-        return prefix + plain + suffix;
-    }
+    void console_clear();
+    std::string reverse_colors(const std::string& s);
 
     namespace Keyboard {
-        inline std::atomic<int> last_key{-2};
-        inline std::atomic<bool> running{true};
-        inline std::atomic<bool> paused{ false };
-        inline termios original_tio;
-        inline bool saved = false;
+        extern std::atomic<int> last_key;
+        extern std::atomic<bool> running;
+        extern std::atomic<bool> paused;
+        extern termios original_tio;
+        extern bool saved;
 
-        inline void init() {
-            if(!saved) {
-                tcgetattr(STDIN_FILENO, &original_tio);
-                saved = true;
-            }
-        }
-        inline void set_raw_mode(bool enable) {
-            static struct termios newt;
-            if(!saved) init();
-            if(enable) {
-                newt = original_tio;
-                newt.c_lflag &= ~(ICANON | ECHO);
-                tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-            } else {
-                tcsetattr(STDIN_FILENO, TCSANOW, &original_tio);
-            }
-        }
-        inline void pause_input() {
-            paused.store(true, std::memory_order_relaxed);
-            // даём потоку время выйти из poll/read
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        inline void resume_input() {
-            // очистим ввод, чтобы случайные байты не попали в следующую обработку
-            tcflush(STDIN_FILENO, TCIFLUSH);
-            paused.store(false, std::memory_order_relaxed);
-        }
-        inline int kbhit() {
-            int old_flags = fcntl(STDIN_FILENO, F_GETFL);
-            fcntl(STDIN_FILENO, F_SETFL, old_flags | O_NONBLOCK);
+        extern std::mutex key_mutex;
+        extern std::queue<int> key_queue;
 
-            char ch;
-            int nread = read(STDIN_FILENO, &ch, 1);
+        void init();
+        void set_raw_mode(bool enable);
+        void pause_input();
+        void resume_input();
+        int kbhit();
 
-            fcntl(STDIN_FILENO, F_SETFL, old_flags);
+        void push_key(int key);
+        int pop_key();
 
-            if(nread == 1) return ch;
-            return -1;
-        }
-        inline std::mutex key_mutex;
-        inline std::queue<int> key_queue;
-
-        inline void push_key(int key) {
-            std::lock_guard<std::mutex> lock(key_mutex);
-            key_queue.push(key);
-        }
-
-        inline int pop_key() {
-            std::lock_guard<std::mutex> lock(key_mutex);
-            if (key_queue.empty()) return -1;
-            int k = key_queue.front();
-            key_queue.pop();
-            return k;
-        }
-
-        inline void keyboard_thread() {
-            struct pollfd pfd;
-            pfd.fd = STDIN_FILENO;
-            pfd.events = POLLIN;
-
-            while(running.load(std::memory_order_relaxed)) {
-                if(paused.load(std::memory_order_relaxed)) {
-                    // когда приостановлен — не дергаем read, просто ждём
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                    continue;
-                }
-
-                // poll с небольшим таймаутом (100 ms) — даёт отзывчивость к paused/running
-                int ret = poll(&pfd, 1, 100);
-                if(ret > 0 && (pfd.revents & POLLIN)) {
-                    unsigned char buf[8];
-                    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
-                    if(n > 0) {
-                        for(ssize_t i = 0; i < n; i++) {
-                            push_key(static_cast<int>(buf[i]));
-                        }
-                    }
-                }
-                // иначе ret==0 -> timeout, продолжим и проверим флаги
-            }
-        }
-        inline std::string read_line_manual() {
+        void keyboard_thread();
+        /*std::string read_line_manual() {
             std::string line;
             unsigned char c;
             while(true) {
@@ -194,7 +93,7 @@ namespace MinesweeperCPP {
                 }
             }
             return line;
-        }
+        }*/
     };
 
     namespace Game {
@@ -213,8 +112,7 @@ namespace MinesweeperCPP {
             std::vector<Cell> data;
 
             // Размеры видимой области
-            uint8_t viewport_width = 15;
-            uint8_t viewport_height = 15;
+            uint8_t viewport_width, viewport_height;
 
             Grid() = default;
             Grid(size_type w, size_type h) : width(w), height(h), data(w * h) {}

@@ -1,4 +1,6 @@
-#include "MinesweeperCPP.hpp"
+#include "../MinesweeperCPP.hpp"
+
+#include <sys/ioctl.h>
 
 namespace MinesweeperCPP {
     namespace Game {

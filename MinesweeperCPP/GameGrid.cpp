@@ -1,5 +1,8 @@
 #include "MinesweeperCPP.hpp"
 
+#include <random>
+#include <algorithm>
+
 namespace MinesweeperCPP {
     namespace Game {
         // Grid
