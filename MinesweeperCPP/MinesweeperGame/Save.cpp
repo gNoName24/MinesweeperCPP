@@ -5,21 +5,6 @@
 
 namespace MinesweeperCPP {
     namespace Game {
-        uint8_t MinesweeperGame::save_cellpack(const Cell& cell) {
-            uint8_t b = 0;
-            b |= (cell.open   ? 1 : 0) << 0;
-            b |= (cell.danger ? 1 : 0) << 1;
-            b |= (cell.flag   ? 1 : 0) << 2;
-            return b;
-        }
-        Cell MinesweeperGame::save_cellunpack(uint8_t b) {
-            Cell cell;
-            cell.open   = b & (1 << 0);
-            cell.danger = b & (1 << 1);
-            cell.flag   = b & (1 << 2);
-            return cell;
-        }
-
         void MinesweeperGame::save(const std::string& file_name) {
             // NoName24 MinesweeperCPP Save File = N24MSCSF
             std::ofstream file(std::filesystem::path(std::filesystem::current_path() / (file_name + ".n24mscsf")), std::ios::binary);
@@ -44,17 +29,28 @@ namespace MinesweeperCPP {
             file.write(reinterpret_cast<const char*>(&step_counter), sizeof(step_counter)); // uint32_t
 
             // Cursor
-            file.write(reinterpret_cast<const char*>(&cursor_position_x), sizeof(cursor_position_x)); // cursor_position_x
-            file.write(reinterpret_cast<const char*>(&cursor_position_y), sizeof(cursor_position_y)); // cursor_position_x
+            file.write(reinterpret_cast<const char*>(&cursor_position_x), sizeof(cursor_position_x)); // uint16_t
+            file.write(reinterpret_cast<const char*>(&cursor_position_y), sizeof(cursor_position_y)); // uint16_t
 
             file.write(reinterpret_cast<const char*>(&starter), sizeof(starter)); // char
             file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat)); // char
             file.write(reinterpret_cast<const char*>(&winner), sizeof(winner)); // char
 
+            // Карта
             for(int i = 0; i < map.data.size(); i++) {
-                const Cell& cell = map.at_flat(i);
-                uint8_t packed = save_cellpack(cell);
+                Cell& cell = map.at_flat(i);
+                uint8_t packed = cell.pack();
                 file.write(reinterpret_cast<const char*>(&packed), sizeof(packed));
+            }
+
+            // История
+            uint32_t history_len = history.size();
+            file.write(reinterpret_cast<const char*>(&history_len), sizeof(history_len));
+            for(int i = 0; i < history_len; i++) {
+                std::vector<uint8_t> packed = history[i].pack();
+                for(int j = 0; j < packed.size(); j++) {
+                    file.write(reinterpret_cast<const char*>(&packed[j]), sizeof(packed[j]));
+                }
             }
 
             file.close();
@@ -93,12 +89,35 @@ namespace MinesweeperCPP {
             file.read(reinterpret_cast<char*>(&defeat), sizeof(defeat));
             file.read(reinterpret_cast<char*>(&winner), sizeof(winner));
 
+            // Карта
             map = Grid(map_width, map_height);
-
-            for(auto& cell : map.data) {
+            for(int i = 0; i < map.data.size(); i++) {
+                Cell& cell = map.at_flat(i);
                 uint8_t packed;
                 file.read(reinterpret_cast<char*>(&packed), sizeof(packed));
-                cell = save_cellunpack(packed);
+                cell.unpack(packed);
+            }
+
+            // История
+            uint32_t history_len;
+            file.read(reinterpret_cast<char*>(&history_len), sizeof(history_len));
+
+            uint8_t history_len_byte; // Длина в байтах для правильного смещения
+            StepHistory history_len_byte_buffer(0, 0, false, false);
+            std::vector<uint8_t> history_len_byte_buffer_vector = history_len_byte_buffer.pack();
+            history_len_byte = history_len_byte_buffer_vector.size();
+            std::cout << "history_len_byte: " << history_len_byte << std::endl;
+
+            for(int i = 0; i < history_len; i++) {
+                std::vector<uint8_t> buffer_vector;
+                for(int j = 0; j < history_len_byte; j++) {
+                    uint8_t buffer;
+                    file.read(reinterpret_cast<char*>(&buffer), sizeof(buffer));
+                    buffer_vector.push_back(buffer);
+                }
+                StepHistory buffer_history;
+                buffer_history.unpack(buffer_vector);
+                history.push_back(buffer_history);
             }
 
             map.generate_count();

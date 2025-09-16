@@ -67,6 +67,19 @@ namespace MinesweeperCPP {
 
             // НЕ хранится в сохранении / Вычисляется в реалтайме
             uint8_t count = 0; // Количество мин возле безопасной открытой ячейки, 0 - пустая ячейка
+
+            uint8_t pack() {
+                uint8_t b = 0;
+                b |= (open ? 1 : 0) << 0;
+                b |= (danger ? 1 : 0) << 1;
+                b |= (flag ? 1 : 0) << 2;
+                return b;
+            }
+            void unpack(uint8_t byte) {
+                open = byte & (1 << 0);
+                danger = byte & (1 << 1);
+                flag = byte & (1 << 2);
+            }
         };
         struct Grid {
             uit_map_width width{};
@@ -119,6 +132,54 @@ namespace MinesweeperCPP {
             bool check_win(const uit_map_mines& total_mines) const;
         };
 
+        // Одна история действия
+        struct StepHistory {
+            StepHistory(uit_map_width cursor_position_x = 0, uit_map_heigth cursor_position_y = 0, bool set_open = false, bool set_flag = false) {
+                this->cursor_position_x = cursor_position_x;
+                this->cursor_position_y = cursor_position_y;
+                this->set_open = set_open;
+                this->set_flag = set_flag;
+            }
+
+            uit_map_width cursor_position_x;
+            uit_map_heigth cursor_position_y;
+
+            bool set_open;
+            bool set_flag;
+
+            std::vector<uint8_t> pack() const {
+                std::vector<uint8_t> buffer;
+
+                // cursor_position
+                buffer.push_back(static_cast<uint8_t>(cursor_position_x & 0xFF));
+                buffer.push_back(static_cast<uint8_t>((cursor_position_x >> 8) & 0xFF));
+                buffer.push_back(static_cast<uint8_t>(cursor_position_y & 0xFF));
+                buffer.push_back(static_cast<uint8_t>((cursor_position_y >> 8) & 0xFF));
+
+                // флаги
+                uint8_t flags = 0;
+                flags |= (set_open ? 1 : 0) << 0;
+                flags |= (set_flag ? 1 : 0) << 1;
+                buffer.push_back(flags);
+
+                return buffer;
+            }
+            void unpack(const std::vector<uint8_t>& buffer) {
+                if(buffer.size() < 5) {
+                    throw std::runtime_error("Дано меньше пяти байтов");
+                }
+
+                // cursor_position
+                cursor_position_x = static_cast<uit_map_width>(buffer[0] | (buffer[1] << 8));
+                cursor_position_y = static_cast<uit_map_heigth>(buffer[2] | (buffer[3] << 8));
+
+                // флаги
+                uint8_t flags = buffer[4];
+                set_open = flags & 0x01;
+                set_flag = flags & 0x02;
+            }
+        };
+
         class MinesweeperGame {
         public:
             MinesweeperGame(const std::string& _name, const uit_map_width& _width, const uit_map_heigth& _height, const uit_map_mines _amount_mines)
@@ -128,8 +189,6 @@ namespace MinesweeperCPP {
             // Сохранение игры в файл
             void save(const std::string& file_name);
             bool load(const std::string& file_name);
-            uint8_t save_cellpack(const Cell& cell); // Упаковка ячейки в один байт
-            Cell save_cellunpack(uint8_t b); // Распаковка одного байта в ячейку
 
             void map_render();
 
@@ -155,6 +214,18 @@ namespace MinesweeperCPP {
             // Cursor
             uit_map_width cursor_position_x = 0;
             uit_map_heigth cursor_position_y = 0;
+
+            // История шагов
+            std::vector<StepHistory> history = {};
+            void history_new_now(bool set_open, bool set_flag) {
+                StepHistory buffer;
+                buffer.cursor_position_x = cursor_position_x;
+                buffer.cursor_position_y = cursor_position_y;
+                buffer.set_open = set_open;
+                buffer.set_flag = set_flag;
+
+                history.push_back(buffer);
+            }
 
         };
     };

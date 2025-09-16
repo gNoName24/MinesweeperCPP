@@ -126,6 +126,13 @@ namespace MinesweeperCPP {
                     std::cout << "j - Вниз / ";
                     std::cout << "k - Вверх / ";
                     std::cout << "l - Вправо\n";
+
+                    for(int i = 0; i < history.size(); i++) {
+                        StepHistory& buffer = history[i];
+                        std::cout << i << ". ";
+                        std::cout << "{" << buffer.cursor_position_x << ", " << buffer.cursor_position_y << "} / ";
+                        std::cout << std::to_string(buffer.set_open) << ", " << std::to_string(buffer.set_flag) << std::endl;
+                    }
                 }
                 usleep(1000);
             }
@@ -182,11 +189,15 @@ namespace MinesweeperCPP {
                     defeat = true;
                     map.open_all();
                 }
+                // Запись в историю
+                history_new_now(true, false);
             } else
             if(key == 'f' && !starter) {
                 if(map.flag(cursor_position_x, cursor_position_y, map_amount_mines, step_counter)) {
                     winner = true;
                 }
+                // Запись в историю
+                history_new_now(false, true);
             }
         }
         bool MinesweeperGame::run_handle_final(const int& key) {
