@@ -11,6 +11,7 @@ add_executable(MinesweeperCPP
     MinesweeperCPP/MinesweeperCPP.cpp
     MinesweeperCPP/Keyboard.cpp
     MinesweeperCPP/GameGrid.cpp
+    MinesweeperCPP/Scenes.cpp
     MinesweeperCPP/MinesweeperGame/Save.cpp
     MinesweeperCPP/MinesweeperGame/Run.cpp
 )

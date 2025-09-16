@@ -5,8 +5,7 @@
 namespace MinesweeperCPP {
     namespace Game {
         void MinesweeperGame::map_render() {
-            size_type max_width = 2;
-
+            //size_type max_width = 2;
             uint16_t camera_position_x = cursor_position_x;
             uint16_t camera_position_y = cursor_position_y;
 
@@ -124,9 +123,9 @@ namespace MinesweeperCPP {
                     std::cout << "s - Сохранить игру на текущем моменте\n\n";
 
                     std::cout << "Передвижение курсора по карте:\n";
-                    std::cout << "h - Вверх / ";
+                    std::cout << "h - Влево / ";
                     std::cout << "j - Вниз / ";
-                    std::cout << "k - Влево / ";
+                    std::cout << "k - Вверх / ";
                     std::cout << "l - Вправо\n";
                 }
                 usleep(1000);
@@ -135,22 +134,7 @@ namespace MinesweeperCPP {
         void MinesweeperGame::run_handle_movement(const int& key) {
             uint16_t dump_x, dump_y;
             switch(key) {
-                case 'h':
-                    cursor_position_y++;
-                    if(cursor_position_y >= map_height) {
-                        cursor_position_y = map_height - 1;
-                    }
-                    break;
-                case 'j':
-                    dump_y = cursor_position_y + 1;
-                    dump_y--;
-                    if(dump_y <= 1) {
-                        cursor_position_y = 0;
-                    } else {
-                        cursor_position_y--;
-                    }
-                    break;
-                case 'k':
+                case 'h': // Влево
                     dump_x = cursor_position_x + 1;
                     dump_x--;
                     if(dump_x <= 1) {
@@ -159,7 +143,22 @@ namespace MinesweeperCPP {
                         cursor_position_x--;
                     }
                     break;
-                case 'l':
+                case 'j': // Вниз
+                    dump_y = cursor_position_y + 1;
+                    dump_y--;
+                    if(dump_y <= 1) {
+                        cursor_position_y = 0;
+                    } else {
+                        cursor_position_y--;
+                    }
+                    break;
+                case 'k': // Вверх
+                    cursor_position_y++;
+                    if(cursor_position_y >= map_height) {
+                        cursor_position_y = map_height - 1;
+                    }
+                    break;
+                case 'l': // Вправо
                     cursor_position_x++;
                     if(cursor_position_x >= map_width) {
                         cursor_position_x = map_width - 1;
@@ -191,11 +190,10 @@ namespace MinesweeperCPP {
             }
         }
         bool MinesweeperGame::run_handle_final(const int& key) {
-            if(defeat && key == 'c') {
-                return true;
-            }
-            if(winner && key == 'c') {
-                return true;
+            if(defeat || winner) {
+                if(key == 'c') {
+                    return true;
+                }
             }
             return false;
         }
@@ -209,6 +207,15 @@ namespace MinesweeperCPP {
             switch(key) {
                 case '1': // Открытие всех ячеек
                     map.open_all();
+                    break;
+                case '2': // Смена состояния starter true/false
+                    starter = !starter;
+                    break;
+                case '3': // Смена состояния defeat true/false
+                    defeat = !defeat;
+                    break;
+                case '4': // Смена состояния winner true/false
+                    winner = !winner;
                     break;
             }
         }
