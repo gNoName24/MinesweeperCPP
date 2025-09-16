@@ -33,25 +33,26 @@ namespace MinesweeperCPP {
             const char magic_numbers_2[] = "MSCSF";
             file.write(magic_numbers_2, sizeof(magic_numbers_2) - 1);
 
-
+            // Название игры. Максимальная длина - 255 символов
             uint8_t name_len = name.size();
             file.write(reinterpret_cast<const char*>(&name_len), sizeof(name_len));
             file.write(name.data(), name_len);
 
-            file.write(reinterpret_cast<const char*>(&map_width), sizeof(map_width));
-            file.write(reinterpret_cast<const char*>(&map_height), sizeof(map_height));
-            file.write(reinterpret_cast<const char*>(&map_amount_mines), sizeof(map_amount_mines));
-            file.write(reinterpret_cast<const char*>(&step_counter), sizeof(step_counter));
+            file.write(reinterpret_cast<const char*>(&map_width), sizeof(map_width)); // uint16_t
+            file.write(reinterpret_cast<const char*>(&map_height), sizeof(map_height)); // uint16_t
+            file.write(reinterpret_cast<const char*>(&map_amount_mines), sizeof(map_amount_mines)); // uint32_t
+            file.write(reinterpret_cast<const char*>(&step_counter), sizeof(step_counter)); // uint32_t
 
             // Cursor
-            file.write(reinterpret_cast<const char*>(&cursor_position_x), sizeof(cursor_position_x));
-            file.write(reinterpret_cast<const char*>(&cursor_position_y), sizeof(cursor_position_y));
+            file.write(reinterpret_cast<const char*>(&cursor_position_x), sizeof(cursor_position_x)); // cursor_position_x
+            file.write(reinterpret_cast<const char*>(&cursor_position_y), sizeof(cursor_position_y)); // cursor_position_x
 
-            file.write(reinterpret_cast<const char*>(&starter), sizeof(starter));
-            file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat));
-            file.write(reinterpret_cast<const char*>(&winner), sizeof(winner));
+            file.write(reinterpret_cast<const char*>(&starter), sizeof(starter)); // char
+            file.write(reinterpret_cast<const char*>(&defeat), sizeof(defeat)); // char
+            file.write(reinterpret_cast<const char*>(&winner), sizeof(winner)); // char
 
-            for(const auto& cell : map.data) {
+            for(int i = 0; i < map.data.size(); i++) {
+                const Cell& cell = map.at_flat(i);
                 uint8_t packed = save_cellpack(cell);
                 file.write(reinterpret_cast<const char*>(&packed), sizeof(packed));
             }

@@ -21,6 +21,21 @@ namespace MinesweeperCPP {
     void console_clear();
     std::string reverse_colors(const std::string& s);
 
+    using uit_map_width = uint16_t; // Максимальная ширина карты
+    using uit_map_heigth = uint16_t; // Максимальная высота карты
+    using uit_map_total = uint32_t; // Максимальное число, относящиеся к ширине и высоте карты в общем
+    using uit_map_mines = uint32_t; // Максимальное число мин
+    using uit_map_flags = uint32_t; // Максимальное число флагов
+    using uit_map_steps = uint32_t; // Максимальное число шагов
+
+    using uit_viewport_width = uint8_t;
+    using uit_viewport_heigth = uint8_t;
+    using it_viewport_width = int8_t;
+    using it_viewport_heigth = int8_t;
+
+    using it_camera_position_x = int32_t;
+    using it_camera_position_y = int32_t;
+
     namespace Keyboard {
         extern std::atomic<int> last_key;
         extern std::atomic<bool> running;
@@ -54,31 +69,32 @@ namespace MinesweeperCPP {
             uint8_t count = 0; // Количество мин возле безопасной открытой ячейки, 0 - пустая ячейка
         };
         struct Grid {
-            size_type width{};
-            size_type height{};
+            uit_map_width width{};
+            uit_map_heigth height{};
             std::vector<Cell> data;
 
             // Размеры видимой области
-            uint8_t viewport_width, viewport_height;
+            uit_viewport_width viewport_width;
+            uit_viewport_heigth viewport_height;
 
             Grid() = default;
-            Grid(size_type w, size_type h) : width(w), height(h), data(w * h) {}
+            Grid(uit_map_width w, uit_map_heigth h) : width(w), height(h), data(w * h) {}
 
-            size_type total() const noexcept { return width * height; }
+            uit_map_total total() const noexcept { return width * height; }
             bool empty() const noexcept { return data.empty(); }
 
-            Cell& at_flat(uint32_t idx) noexcept { return data[idx]; }
-            Cell& at_xy(size_type x, size_type y) noexcept { return data[y * width + x]; }
+            Cell& at_flat(uit_map_total idx) noexcept { return data[idx]; }
+            Cell& at_xy(uit_map_width x, uit_map_heigth y) noexcept { return data[y * width + x]; }
 
-            void set_flat(uint32_t idx, Cell v) noexcept { data[idx] = v; }
-            void set_xy(size_type x, size_type y, Cell v) noexcept { data[y * width + x] = v; }
+            void set_flat(uit_map_total idx, Cell v) noexcept { data[idx] = v; }
+            void set_xy(uit_map_width x, uit_map_heigth y, Cell v) noexcept { data[y * width + x] = v; }
 
             // Ресет карты. При этом, ресетуются только open, flag и count
             void reset_funny();
 
             // Генерация указанного количества мин в рандомных местах
             // Сначала равномерно ставится указанное количество мин, а потом все элементы карты перемешиваются
-            void generate_mines(uint32_t amount);
+            void generate_mines(uit_map_mines amount);
 
             // Генерация числа соседних мин к безопасным ячейкам
             void generate_count();
@@ -90,22 +106,22 @@ namespace MinesweeperCPP {
                 for(int i = 0; i < total(); i++) { data[i].flag = true; }
             }
 
-            bool open(size_type x, size_type y, uint32_t& step_counter);
-            bool flag(size_type x, size_type y, const size_type& total_mines, uint32_t& step_counter);
+            bool open(uit_map_width x, uit_map_heigth y, uit_map_steps& step_counter);
+            bool flag(uit_map_width x, uit_map_heigth y, const uit_map_mines& total_mines, uit_map_steps& step_counter);
 
-            void open_recurs(size_type x, size_type y);
+            void open_recurs(uit_map_width x, uit_map_heigth y);
 
             // Общее количество установленных флагов
-            size_type flag_count_total() const;
+            uit_map_flags flag_count_total() const;
             // Общее количество правильно установленных флагов
-            size_type flag_count_success() const;
+            uit_map_flags flag_count_success() const;
 
-            bool check_win(const size_type& total_mines) const;
+            bool check_win(const uit_map_mines& total_mines) const;
         };
 
         class MinesweeperGame {
         public:
-            MinesweeperGame(const std::string& _name, const uint16_t& _width, const uint16_t& _height, const uint32_t _amount_mines)
+            MinesweeperGame(const std::string& _name, const uit_map_width& _width, const uit_map_heigth& _height, const uit_map_mines _amount_mines)
                 : name(_name), map_width(_width), map_height(_height), map_amount_mines(_amount_mines), map(map_width, map_height)
             {}
 
@@ -127,17 +143,18 @@ namespace MinesweeperCPP {
 
         private:
             std::string name;
-            uint16_t map_width, map_height;
-            uint32_t map_amount_mines;
-            uint32_t step_counter = 0;
+            uit_map_width map_width;
+            uit_map_heigth map_height;
+            uit_map_mines map_amount_mines;
+            uit_map_steps step_counter = 0;
             Grid map;
             bool starter = true;
             bool defeat = false;
             bool winner = false;
 
             // Cursor
-            uint16_t cursor_position_x = 0;
-            uint16_t cursor_position_y = 0;
+            uit_map_width cursor_position_x = 0;
+            uit_map_heigth cursor_position_y = 0;
 
         };
     };
@@ -172,6 +189,7 @@ namespace MinesweeperCPP {
                     console_clear();
                     std::cout << "Нажмите на (почти) любую клавишу чтобы начать игру\n";
                     game->run();
+                    std::cout << "Игра окончена\n";
                     game.reset();
                 }
             }

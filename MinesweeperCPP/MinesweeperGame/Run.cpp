@@ -6,14 +6,14 @@ namespace MinesweeperCPP {
     namespace Game {
         void MinesweeperGame::map_render() {
             //size_type max_width = 2;
-            uint16_t camera_position_x = cursor_position_x;
-            uint16_t camera_position_y = cursor_position_y;
+            it_camera_position_x camera_position_x = cursor_position_x;
+            it_camera_position_y camera_position_y = cursor_position_y;
 
-            int half_map_width = static_cast<int>(map.viewport_width)/2;
-            int half_map_height = static_cast<int>(map.viewport_height)/2;
+            it_viewport_width half_map_width = static_cast<int>(map.viewport_width)/2;
+            it_viewport_heigth half_map_height = static_cast<int>(map.viewport_height)/2;
 
-            for(int y = half_map_height + camera_position_y; y > -half_map_height + camera_position_y; --y) {
-                for(int x = -half_map_width + camera_position_x; x < half_map_width + camera_position_x; ++x) {
+            for(it_viewport_width y = half_map_height + camera_position_y; y > -half_map_height + camera_position_y; --y) {
+                for(it_viewport_heigth x = -half_map_width + camera_position_x; x < half_map_width + camera_position_x; ++x) {
                     if(x < 0 || x >= map_width || y < 0 || y >= map_height) {
                         std::cout << "  ";
                         continue;
@@ -55,7 +55,6 @@ namespace MinesweeperCPP {
 
         void MinesweeperGame::run() {
             Keyboard::set_raw_mode(true);
-            int key;
             while(true) {
                 int key;
                 bool got = false;
@@ -88,7 +87,7 @@ namespace MinesweeperCPP {
 
                     console_clear();
 
-                    size_type flag_count_total = map.flag_count_total();
+                    uit_map_flags flag_count_total = map.flag_count_total();
 
                     std::cout << " - " << name << " - " << map_width << "x" << map_height << " - " << map_amount_mines << " -\n\n";
 
@@ -132,7 +131,8 @@ namespace MinesweeperCPP {
             }
         }
         void MinesweeperGame::run_handle_movement(const int& key) {
-            uint16_t dump_x, dump_y;
+            uit_map_width dump_x;
+            uit_map_heigth dump_y;
             switch(key) {
                 case 'h': // Влево
                     dump_x = cursor_position_x + 1;
