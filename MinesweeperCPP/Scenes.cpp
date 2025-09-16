@@ -25,8 +25,11 @@ namespace MinesweeperCPP {
 
                     // DEBUG
                 case 'd':
-                    game = std::make_unique<Game::MinesweeperGame>("DEBUGGAME", 32, 32, 128);
-                    game->run();
+                    /*game = std::make_unique<Game::MinesweeperGame>("DEBUGGAME", 16, 16, 16);
+                    game->run();*/
+                    game = std::make_unique<Game::MinesweeperGame>("LOAD", 1, 1, 0);
+                    if(game->load("DEBUGGAME")) {}
+                    game->mode_history = true;
                     break;
 
                 case -2:
@@ -42,12 +45,28 @@ namespace MinesweeperCPP {
             Keyboard::pause_input();
             Keyboard::set_raw_mode(false);
             std::string file_name;
+            int mode = 0;
+
+            std::cout << "В каком режиме загрузить сохранение?\n";
+            std::cout << "1 - В обычном режиме\n";
+            std::cout << "2 - В режиме просмотра истории\n";
+            std::cin >> mode;
+            if(mode <= 0 || mode > 2) return;
 
             std::cout << "Введите полной название файла по текущему пути: ";
             std::cin >> file_name;
 
             game = std::make_unique<Game::MinesweeperGame>("LOAD", 1, 1, 0);
             if(game->load(file_name)) {}
+
+            switch(mode) {
+                case 1:
+                    break;
+                case 2:
+                    game->mode_history = true;
+                    break;
+            }
+
             Keyboard::set_raw_mode(true);
             Keyboard::resume_input();
         }

@@ -14,4 +14,7 @@ add_executable(MinesweeperCPP
     MinesweeperCPP/Scenes.cpp
     MinesweeperCPP/MinesweeperGame/Save.cpp
     MinesweeperCPP/MinesweeperGame/Run.cpp
+
+    MinesweeperCPP/MinesweeperGame/Default/Default.cpp
+    MinesweeperCPP/MinesweeperGame/History/History.cpp
 )

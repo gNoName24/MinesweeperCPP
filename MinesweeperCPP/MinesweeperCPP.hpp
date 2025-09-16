@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <unistd.h>
 
 // Для потоков
@@ -14,6 +15,7 @@
 
 // Консоль
 #include <termios.h> // Получение клавиш
+#include <sys/ioctl.h>
 
 namespace MinesweeperCPP {
     using size_type = std::size_t;
@@ -192,13 +194,25 @@ namespace MinesweeperCPP {
 
             void map_render();
 
+            std::string get_title();
+
             void run();
-            void run_handle_movement(const int& key);
-            void run_handle_save(const int& key);
-            void run_handle_step(const int& key);
-            bool run_handle_final(const int& key);
-            bool run_handle_exit(const int& key);
-            void run_handle_debug(const int& key);
+
+            void run_default();
+            void run_default_handle_movement(const int& key);
+            void run_default_handle_save(const int& key);
+            void run_default_handle_step(const int& key);
+            bool run_default_handle_final(const int& key);
+            bool run_default_handle_exit(const int& key);
+            void run_default_handle_debug(const int& key);
+
+            void run_history();
+            void run_history_step(int step);
+
+            void run_history_handle_replay(const int& key);
+
+            // Режимы
+            bool mode_history = false;
 
         private:
             std::string name;
@@ -226,6 +240,12 @@ namespace MinesweeperCPP {
 
                 history.push_back(buffer);
             }
+
+            // mode_history == true
+            bool mhistory_replay = false;
+            uint32_t mhistory_replay_step = 0;
+            uint32_t mhistory_replay_step_max;
+            int mhistory_replay_sleep_milliseconds = 100;
 
         };
     };
