@@ -30,16 +30,16 @@ namespace MinesweeperCPP {
     std::string reverse_colors(const std::string& s);
 
     using uit_map_width = uint16_t; // Максимальная ширина карты
-    using uit_map_heigth = uint16_t; // Максимальная высота карты
+    using uit_map_height = uint16_t; // Максимальная высота карты
     using uit_map_total = uint32_t; // Максимальное число, относящиеся к ширине и высоте карты в общем
     using uit_map_mines = uint32_t; // Максимальное число мин
     using uit_map_flags = uint32_t; // Максимальное число флагов
     using uit_map_steps = uint32_t; // Максимальное число шагов
 
     using uit_viewport_width = uint8_t;
-    using uit_viewport_heigth = uint8_t;
+    using uit_viewport_height = uint8_t;
     using it_viewport_width = int8_t;
-    using it_viewport_heigth = int8_t;
+    using it_viewport_height = int8_t;
 
     using it_camera_position_x = int32_t;
     using it_camera_position_y = int32_t;
@@ -91,24 +91,24 @@ namespace MinesweeperCPP {
         };
         struct Grid {
             uit_map_width width{};
-            uit_map_heigth height{};
+            uit_map_height height{};
             std::vector<Cell> data;
 
             // Размеры видимой области
             uit_viewport_width viewport_width;
-            uit_viewport_heigth viewport_height;
+            uit_viewport_height viewport_height;
 
             Grid() = default;
-            Grid(uit_map_width w, uit_map_heigth h) : width(w), height(h), data(w * h) {}
+            Grid(uit_map_width w, uit_map_height h) : width(w), height(h), data(w * h) {}
 
             uit_map_total total() const noexcept { return width * height; }
             bool empty() const noexcept { return data.empty(); }
 
             Cell& at_flat(uit_map_total idx) noexcept { return data[idx]; }
-            Cell& at_xy(uit_map_width x, uit_map_heigth y) noexcept { return data[y * width + x]; }
+            Cell& at_xy(uit_map_width x, uit_map_height y) noexcept { return data[y * width + x]; }
 
             void set_flat(uit_map_total idx, Cell v) noexcept { data[idx] = v; }
-            void set_xy(uit_map_width x, uit_map_heigth y, Cell v) noexcept { data[y * width + x] = v; }
+            void set_xy(uit_map_width x, uit_map_height y, Cell v) noexcept { data[y * width + x] = v; }
 
             // Ресет карты. При этом, ресетуются только open, flag и count
             void reset_funny();
@@ -127,10 +127,10 @@ namespace MinesweeperCPP {
                 for(int i = 0; i < total(); i++) { data[i].flag = true; }
             }
 
-            bool open(uit_map_width x, uit_map_heigth y, uit_map_steps& step_counter);
-            bool flag(uit_map_width x, uit_map_heigth y, const uit_map_mines& total_mines, uit_map_steps& step_counter);
+            bool open(uit_map_width x, uit_map_height y, uit_map_steps& step_counter);
+            bool flag(uit_map_width x, uit_map_height y, const uit_map_mines& total_mines, uit_map_steps& step_counter);
 
-            void open_recurs(uit_map_width x, uit_map_heigth y);
+            void open_recurs(uit_map_width x, uit_map_height y);
 
             // Общее количество установленных флагов
             uit_map_flags flag_count_total() const;
@@ -142,7 +142,7 @@ namespace MinesweeperCPP {
 
         // Одна история действия
         struct StepHistory {
-            StepHistory(uit_map_width cursor_position_x = 0, uit_map_heigth cursor_position_y = 0, bool set_open = false, bool set_flag = false) {
+            StepHistory(uit_map_width cursor_position_x = 0, uit_map_height cursor_position_y = 0, bool set_open = false, bool set_flag = false) {
                 this->cursor_position_x = cursor_position_x;
                 this->cursor_position_y = cursor_position_y;
                 this->set_open = set_open;
@@ -150,7 +150,7 @@ namespace MinesweeperCPP {
             }
 
             uit_map_width cursor_position_x;
-            uit_map_heigth cursor_position_y;
+            uit_map_height cursor_position_y;
 
             bool set_open;
             bool set_flag;
@@ -179,7 +179,7 @@ namespace MinesweeperCPP {
 
                 // cursor_position
                 cursor_position_x = static_cast<uit_map_width>(buffer[0] | (buffer[1] << 8));
-                cursor_position_y = static_cast<uit_map_heigth>(buffer[2] | (buffer[3] << 8));
+                cursor_position_y = static_cast<uit_map_height>(buffer[2] | (buffer[3] << 8));
 
                 // флаги
                 uint8_t flags = buffer[4];
@@ -190,7 +190,7 @@ namespace MinesweeperCPP {
 
         class MinesweeperGame {
         public:
-            MinesweeperGame(const std::string& _name, const uit_map_width& _width, const uit_map_heigth& _height, const uit_map_mines _amount_mines)
+            MinesweeperGame(const std::string& _name, const uit_map_width& _width, const uit_map_height& _height, const uit_map_mines _amount_mines)
                 : name(_name), map_width(_width), map_height(_height), map_amount_mines(_amount_mines), map(map_width, map_height)
             {}
 
@@ -223,7 +223,7 @@ namespace MinesweeperCPP {
         private:
             std::string name;
             uit_map_width map_width;
-            uit_map_heigth map_height;
+            uit_map_height map_height;
             uit_map_mines map_amount_mines;
             uit_map_steps step_counter = 0;
             Grid map;
@@ -233,7 +233,7 @@ namespace MinesweeperCPP {
 
             // Cursor
             uit_map_width cursor_position_x = 0;
-            uit_map_heigth cursor_position_y = 0;
+            uit_map_height cursor_position_y = 0;
 
             // История шагов
             std::vector<StepHistory> history = {};

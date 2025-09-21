@@ -8,7 +8,7 @@ namespace MinesweeperCPP {
             it_camera_position_y camera_position_y = cursor_position_y;
 
             it_viewport_width half_viewport_width = static_cast<int>(map.viewport_width)/2;
-            it_viewport_heigth half_viewport_height = static_cast<int>(map.viewport_height)/2;
+            it_viewport_height half_viewport_height = static_cast<int>(map.viewport_height)/2;
 
             for(it_camera_position_x y = half_viewport_height + camera_position_y; y > -half_viewport_height+ + camera_position_y; --y) {
                 for(it_camera_position_y x = -half_viewport_width + camera_position_x; x < half_viewport_width + camera_position_x; ++x) {

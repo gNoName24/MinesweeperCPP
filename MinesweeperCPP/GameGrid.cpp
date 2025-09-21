@@ -17,11 +17,11 @@ namespace MinesweeperCPP {
         }
         void Grid::generate_mines(uit_map_mines amount) {
             std::cout << "-> Генерация мин" << std::endl;
-            std::vector<std::pair<uit_map_width, uit_map_heigth>> coords;
+            std::vector<std::pair<uit_map_width, uit_map_height>> coords;
             coords.reserve(width * height);
 
             for(uit_map_width y = 0; y < height; ++y) {
-                for(uit_map_heigth x = 0; x < width; ++x) {
+                for(uit_map_height x = 0; x < width; ++x) {
                     coords.emplace_back(x, y);
                 }
             }
@@ -38,7 +38,7 @@ namespace MinesweeperCPP {
         void Grid::generate_count() {
             std::cout << "-> Генерация количества" << std::endl;
             for(uit_map_width row = 0; row < height; ++row) {
-                for(uit_map_heigth col = 0; col < width; ++col) {
+                for(uit_map_height col = 0; col < width; ++col) {
                     Cell &cell = at_xy(col, row);
 
                     if(cell.danger) { // если это мина
@@ -53,7 +53,7 @@ namespace MinesweeperCPP {
                             if(offset_row == 0 && offset_col == 0) continue; // пропускаем саму клетку
 
                             uit_map_width neighbour_col = col + offset_col;
-                            uit_map_heigth neighbour_row = row + offset_row;
+                            uit_map_height neighbour_row = row + offset_row;
 
                             if(neighbour_col < width && neighbour_row < height) {
                                 if(at_xy(neighbour_col, neighbour_row).danger) {
@@ -68,7 +68,7 @@ namespace MinesweeperCPP {
             }
         }
 
-        bool Grid::open(uit_map_width x, uit_map_heigth y, uit_map_steps& step_counter) {
+        bool Grid::open(uit_map_width x, uit_map_height y, uit_map_steps& step_counter) {
             std::cout << "-> Открытие ячейки " << x << "x" << y << "" << std::endl;
             if(x >= width || y >= height) return false;
             if(at_xy(x, y).danger) { // Если попался на мину
@@ -79,7 +79,7 @@ namespace MinesweeperCPP {
                 return false;
             }
         }
-        bool Grid::flag(uit_map_width x, uit_map_heigth y, const uit_map_mines& total_mines, uit_map_steps& step_counter) {
+        bool Grid::flag(uit_map_width x, uit_map_height y, const uit_map_mines& total_mines, uit_map_steps& step_counter) {
             std::cout << "-> Пометка ячейки " << x << "x" << y << " флагом" << std::endl;
             if(x >= width || y >= height) return false;
             Cell& cell = at_xy(x, y);
@@ -98,7 +98,7 @@ namespace MinesweeperCPP {
             return false;
         }
 
-        void Grid::open_recurs(uit_map_width x, uit_map_heigth y) {
+        void Grid::open_recurs(uit_map_width x, uit_map_height y) {
             if(x >= width || y >= height) return;
             Cell &cell = at_xy(x, y);
 
@@ -115,9 +115,9 @@ namespace MinesweeperCPP {
                     if(dx == 0 && dy == 0) continue;
 
                     uit_map_width nx = x + static_cast<uit_map_width>(dx);
-                    uit_map_heigth ny = y + static_cast<uit_map_width>(dy);
+                    uit_map_height ny = y + static_cast<uit_map_width>(dy);
 
-                    if(nx >= 0 && ny >= 0 && nx < static_cast<uit_map_width>(width) && ny < static_cast<uit_map_heigth>(height)) {
+                    if(nx >= 0 && ny >= 0 && nx < static_cast<uit_map_width>(width) && ny < static_cast<uit_map_height>(height)) {
                         open_recurs(nx, ny);
                     }
                 }

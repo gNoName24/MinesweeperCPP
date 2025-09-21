@@ -111,7 +111,7 @@ namespace MinesweeperCPP {
                 std::cout << "Введите корректное число от 1 до " << std::numeric_limits<uint16_t>::max() << "\n";
             }
 
-            // game_map_heigth
+            // game_map_height
             while(true) {
                 std::string input;
                 std::cout << "Введите высоту карты: ";

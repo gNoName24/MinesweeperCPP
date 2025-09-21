@@ -87,7 +87,7 @@ namespace MinesweeperCPP {
         // Handle
         void MinesweeperGame::run_default_handle_movement(const int& key) {
             uit_map_width dump_x;
-            uit_map_heigth dump_y;
+            uit_map_height dump_y;
             switch(key) {
                 case 'h': // Влево
                     dump_x = cursor_position_x + 1;
