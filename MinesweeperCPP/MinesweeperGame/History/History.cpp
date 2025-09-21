@@ -8,14 +8,21 @@ namespace MinesweeperCPP {
                 int key;
                 bool got = false;
                 bool quit = false;
-                while((key = Keyboard::pop_key()) != -1) {
-                    run_default_handle_movement(key);
-                    if(run_default_handle_exit(key)) {
-                        quit = true;
+                if(!mhistory_replay) {
+                    while((key = Keyboard::pop_key()) != -1) {
+                        run_default_handle_movement(key);
+                        if(run_default_handle_exit(key)) {
+                            quit = true;
+                        }
+
+                        run_history_handle_replay(key);
+
+                        got = true;
                     }
-
+                } else {
+                    key = Keyboard::pop_key();
+                    run_default_handle_movement(key);
                     run_history_handle_replay(key);
-
                     got = true;
                 }
 
@@ -27,7 +34,10 @@ namespace MinesweeperCPP {
 
                 if(got) {
                     struct winsize w;
-                    if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == -1) { perror("ioctl"); }
+                    if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == -1) {
+                        logger.log_error("ioctl");
+                        perror("ioctl");
+                    }
                     map.viewport_width = w.ws_col / 2;
                     map.viewport_height = w.ws_row / 2;
 
@@ -47,7 +57,7 @@ namespace MinesweeperCPP {
 
                     std::cout << "\ns - ";
                     if(!mhistory_replay_step) { std::cout << "Начать";
-                    } else { std::cout << "Закончить"; }
+                    } else { std::cout << "Остановить"; }
                     std::cout << " воспроизводить шаги начиная с текущей\n";
 
                     std::cout << "\nПередвижение курсора по карте:\n";
@@ -55,6 +65,9 @@ namespace MinesweeperCPP {
                     std::cout << "j - Вниз / ";
                     std::cout << "k - Вверх / ";
                     std::cout << "l - Вправо\n";
+
+                    Notifications::output();
+                    Notifications::step();
 
                     // Если mhistory_replay запущен
                     if(mhistory_replay) {

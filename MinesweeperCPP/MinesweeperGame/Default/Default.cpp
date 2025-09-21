@@ -29,6 +29,7 @@ namespace MinesweeperCPP {
                 if(got) {
                     struct winsize w;
                     if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == -1) {
+                        logger.log_error("ioctl");
                         perror("ioctl");
                     }
                     map.viewport_width = w.ws_col / 2;
@@ -76,12 +77,8 @@ namespace MinesweeperCPP {
                     std::cout << "k - Вверх / ";
                     std::cout << "l - Вправо\n";
 
-                    /*for(int i = 0; i < history.size(); i++) {
-                     *               StepHistory& buffer = history[i];
-                     *               std::cout << i << ". ";
-                     *               std::cout << "{" << buffer.cursor_position_x << ", " << buffer.cursor_position_y << "} / ";
-                     *               std::cout << std::to_string(buffer.set_open) << ", " << std::to_string(buffer.set_flag) << std::endl;
-                }*/
+                    Notifications::output();
+                    Notifications::step();
                 }
                 usleep(1000);
             }

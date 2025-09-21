@@ -12,9 +12,20 @@ add_executable(MinesweeperCPP
     MinesweeperCPP/Keyboard.cpp
     MinesweeperCPP/GameGrid.cpp
     MinesweeperCPP/Scenes.cpp
+    MinesweeperCPP/Notifications.cpp
     MinesweeperCPP/MinesweeperGame/Save.cpp
     MinesweeperCPP/MinesweeperGame/Run.cpp
 
     MinesweeperCPP/MinesweeperGame/Default/Default.cpp
     MinesweeperCPP/MinesweeperGame/History/History.cpp
 )
+include(FetchContent)
+
+FetchContent_Declare(
+    InitTools
+    GIT_REPOSITORY https://github.com/gNoName24/InitTools.git
+    GIT_TAG        v2.0.0
+)
+FetchContent_MakeAvailable(InitTools)
+
+target_link_libraries(MinesweeperCPP PUBLIC InitConsole)

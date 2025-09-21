@@ -3,6 +3,8 @@
 #include <regex>
 
 namespace MinesweeperCPP {
+    InitConsole::Logger logger("logger");
+
     void console_clear() {
         std::cout << "\033[2J\033[1;1H";
     }

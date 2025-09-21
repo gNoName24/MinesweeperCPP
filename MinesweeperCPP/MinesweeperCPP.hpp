@@ -3,7 +3,9 @@
 #include <iostream>
 #include <cstdint>
 #include <string>
+#include <sstream>
 #include <unordered_map>
+#include <exception>
 #include <unistd.h>
 
 // Для потоков
@@ -17,7 +19,11 @@
 #include <termios.h> // Получение клавиш
 #include <sys/ioctl.h>
 
+#include <InitTools/InitConsole.hpp>
+
 namespace MinesweeperCPP {
+    extern InitConsole::Logger logger;
+
     using size_type = std::size_t;
 
     void console_clear();
@@ -231,6 +237,7 @@ namespace MinesweeperCPP {
 
             // История шагов
             std::vector<StepHistory> history = {};
+            uint32_t history_len;
             void history_new_now(bool set_open, bool set_flag) {
                 StepHistory buffer;
                 buffer.cursor_position_x = cursor_position_x;
@@ -259,6 +266,29 @@ namespace MinesweeperCPP {
         void game_load();
     };
 
+    // Уведомления
+    namespace Notifications {
+        struct Note {
+            std::string type{}; // info, warning, error
+            std::string message{};
+            int life; // Количество жизней. 0 - очищается
+
+            std::string macros_file_name;
+            int macros_file_line;
+            std::string macros_function_name;
+        };
+        extern std::vector<Note> list;
+
+        void output();
+        void step();
+        void clear();
+
+        void add_info(const std::string& message);
+        void add_warning(const std::string& message);
+        void add_error_full(const std::string& message, const std::string& file_name, int file_line, const std::string& function_name);
+        #define add_error(message) add_error_full(message, __FILE_NAME__, __LINE__, __FUNCTION__)
+    };
+
     inline void starter() {
         Keyboard::init();
         Keyboard::set_raw_mode(true);
@@ -276,7 +306,7 @@ namespace MinesweeperCPP {
                     std::cout << "Завершение" << std::endl;
                     break;
                 }
-                if (game) {
+                if(game) {
                     console_clear();
                     std::cout << "Нажмите на (почти) любую клавишу чтобы начать игру\n";
                     game->run();
