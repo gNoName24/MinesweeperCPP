@@ -53,13 +53,13 @@ namespace MinesweeperCPP {
             std::cout << "В каком режиме загрузить сохранение?\n";
             std::cout << "1 - В обычном режиме\n";
             std::cout << "2 - В режиме просмотра истории\n";
-            std::cout << "> ";
+            std::cout << "\n> ";
             std::getline(std::cin, input);
             std::stringstream ss(input);
             if(ss >> mode && ss.eof()) {
                 if(mode == 1 || mode == 2) {
-                    std::cout << "Введите полной название файла по текущему пути: ";
-                    std::cin >> file_name;
+                    std::cout << "\nВведите полной название файла по текущему пути: ";
+                    std::getline(std::cin >> std::ws, file_name);
 
                     game = std::make_unique<Game::MinesweeperGame>("LOAD", 1, 1, 0);
                     bool game_b = game->load(file_name);
